@@ -7,11 +7,11 @@ FROM node:20-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# 安装 pnpm
-RUN npm install -g pnpm
+# 固定 pnpm 版本，避免最新版改变配置读取规则后导致 frozen lockfile 失败
+RUN npm install -g pnpm@10.26.0
 
 # 复制包管理文件
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # 安装依赖
 RUN pnpm install --frozen-lockfile
@@ -23,8 +23,8 @@ RUN pnpm install --frozen-lockfile
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# 安装 pnpm
-RUN npm install -g pnpm
+# 与依赖安装阶段使用相同的 pnpm 版本
+RUN npm install -g pnpm@10.26.0
 
 # 从 deps 阶段复制已安装的依赖
 COPY --from=deps /app/node_modules ./node_modules
@@ -52,8 +52,8 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# 安装 pnpm
-RUN npm install -g pnpm
+# 与项目声明保持一致
+RUN npm install -g pnpm@10.26.0
 
 # 复制必要的文件
 COPY --from=builder /app/public ./public
