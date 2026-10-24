@@ -21,7 +21,7 @@ export async function compressImage(file: File, maxSizeBytes: number): Promise<F
   // 初始压缩质量
   let quality = 0.9
   let compressedFile: File | null = null
-  let canvas: HTMLCanvasElement | null = null
+  let canvas: HTMLCanvasElement
 
   // 如果文件是JPEG或PNG，使用canvas压缩
   if (file.type === "image/jpeg" || file.type === "image/png") {
@@ -56,7 +56,7 @@ export async function compressImage(file: File, maxSizeBytes: number): Promise<F
     // 尝试不同的质量级别，直到文件大小小于最大值
     while (quality > 0.1) {
       const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob(
+        canvas!.toBlob(
           (b) => {
             if (b) resolve(b)
             else resolve(new Blob([], { type: file.type }))
@@ -78,7 +78,7 @@ export async function compressImage(file: File, maxSizeBytes: number): Promise<F
     // 如果所有质量级别都无法达到目标大小，使用最低质量
     if (!compressedFile) {
       const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob(
+        canvas!.toBlob(
           (b) => {
             if (b) resolve(b)
             else resolve(new Blob([], { type: file.type }))

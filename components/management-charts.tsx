@@ -105,13 +105,13 @@ export function ManagementCharts({ selectedDate, refreshTrigger }: ManagementCha
 
       // 检查是否有任何真实数据
       const hasRealData = data.some(entry =>
-        entry.weight !== undefined || entry.caloriesIn > 0 || entry.caloriesOut > 0
+        entry.weight !== undefined || (entry.caloriesIn ?? 0) > 0 || (entry.caloriesOut ?? 0) > 0
       )
 
       if (hasRealData) {
         // 计算有效数据点的数量
         const realDataCount = data.filter(entry =>
-          entry.weight !== undefined || entry.caloriesIn > 0 || entry.caloriesOut > 0
+          entry.weight !== undefined || (entry.caloriesIn ?? 0) > 0 || (entry.caloriesOut ?? 0) > 0
         ).length
 
         // 智能调整显示策略
@@ -147,17 +147,17 @@ export function ManagementCharts({ selectedDate, refreshTrigger }: ManagementCha
     if (realDataCount <= 3) {
       // 只显示有数据的天数及其前后各一天，最少显示5天
       const dataWithRealValues = data.filter(entry =>
-        entry.weight !== undefined || entry.caloriesIn > 0 || entry.caloriesOut > 0
+        entry.weight !== undefined || (entry.caloriesIn ?? 0) > 0 || (entry.caloriesOut ?? 0) > 0
       )
 
       if (dataWithRealValues.length === 0) return data
 
       // 找到第一个和最后一个有数据的索引
       const firstRealIndex = data.findIndex(entry =>
-        entry.weight !== undefined || entry.caloriesIn > 0 || entry.caloriesOut > 0
+        entry.weight !== undefined || (entry.caloriesIn ?? 0) > 0 || (entry.caloriesOut ?? 0) > 0
       )
       const lastRealIndex = data.findLastIndex(entry =>
-        entry.weight !== undefined || entry.caloriesIn > 0 || entry.caloriesOut > 0
+        entry.weight !== undefined || (entry.caloriesIn ?? 0) > 0 || (entry.caloriesOut ?? 0) > 0
       )
 
       // 计算显示范围，确保至少显示5天
@@ -178,10 +178,10 @@ export function ManagementCharts({ selectedDate, refreshTrigger }: ManagementCha
     if (realDataCount < totalDays / 3) {
       // 数据稀疏，只显示有数据的区间
       const firstRealIndex = data.findIndex(entry =>
-        entry.weight !== undefined || entry.caloriesIn > 0 || entry.caloriesOut > 0
+        entry.weight !== undefined || (entry.caloriesIn ?? 0) > 0 || (entry.caloriesOut ?? 0) > 0
       )
       const lastRealIndex = data.findLastIndex(entry =>
-        entry.weight !== undefined || entry.caloriesIn > 0 || entry.caloriesOut > 0
+        entry.weight !== undefined || (entry.caloriesIn ?? 0) > 0 || (entry.caloriesOut ?? 0) > 0
       )
 
       if (firstRealIndex !== -1 && lastRealIndex !== -1) {
@@ -220,7 +220,7 @@ export function ManagementCharts({ selectedDate, refreshTrigger }: ManagementCha
     setChartData(data)
   }
 
-  const formatTooltipValue = (value: number, name: string) => {
+  const formatTooltipValue = (value: number | string | ReadonlyArray<number | string> | undefined, name: string | number | undefined): [React.ReactNode, string | number] => {
     switch (name) {
       case 'weight':
         return [`${value} kg`, t('weight')]
@@ -229,9 +229,9 @@ export function ManagementCharts({ selectedDate, refreshTrigger }: ManagementCha
       case 'caloriesOut':
         return [`${value} kcal`, t('caloriesOut')]
       case 'calorieDeficit':
-        return [`${value > 0 ? '+' : ''}${value} kcal`, value > 0 ? t('calorieSurplus') : t('calorieDeficit')]
+        return [`${Number(value) > 0 ? '+' : ''}${value} kcal`, Number(value) > 0 ? t('calorieSurplus') : t('calorieDeficit')]
       default:
-        return [value, name]
+        return [value ?? '', name ?? '']
     }
   }
 
@@ -355,10 +355,9 @@ export function ManagementCharts({ selectedDate, refreshTrigger }: ManagementCha
                       <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                       <XAxis
                         dataKey="date"
+                        angle={dateRange === '90d' ? -90 : -45}
                         tick={{
-                          fontSize: window.innerWidth < 768 ? 9 : 11,
-                          angle: dateRange === '90d' ? -90 : -45,
-                          textAnchor: 'end'
+                          fontSize: window.innerWidth < 768 ? 9 : 11,                          textAnchor: 'end'
                         }}
                         tickLine={{ stroke: '#e2e8f0' }}
                         interval={getXAxisInterval()}
@@ -401,10 +400,9 @@ export function ManagementCharts({ selectedDate, refreshTrigger }: ManagementCha
                       <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                       <XAxis
                         dataKey="date"
+                        angle={dateRange === '90d' ? -90 : -45}
                         tick={{
-                          fontSize: 11,
-                          angle: dateRange === '90d' ? -90 : -45,
-                          textAnchor: 'end'
+                          fontSize: 11,                          textAnchor: 'end'
                         }}
                         tickLine={{ stroke: '#e2e8f0' }}
                         interval={getXAxisInterval()}
@@ -426,7 +424,7 @@ export function ManagementCharts({ selectedDate, refreshTrigger }: ManagementCha
                           borderRadius: '8px'
                         }}
                       />
-                      <Legend />
+                      <Legend itemSorter={(item) => item.dataKey === 'caloriesIn' ? 0 : 1} position="bottom" />
                       <Line
                         type="monotone"
                         dataKey="caloriesIn"
@@ -448,10 +446,9 @@ export function ManagementCharts({ selectedDate, refreshTrigger }: ManagementCha
                       <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                       <XAxis
                         dataKey="date"
+                        angle={dateRange === '90d' ? -90 : -45}
                         tick={{
-                          fontSize: 11,
-                          angle: dateRange === '90d' ? -90 : -45,
-                          textAnchor: 'end'
+                          fontSize: 11,                          textAnchor: 'end'
                         }}
                         tickLine={{ stroke: '#e2e8f0' }}
                         interval={getXAxisInterval()}
@@ -494,10 +491,9 @@ export function ManagementCharts({ selectedDate, refreshTrigger }: ManagementCha
                       <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                       <XAxis
                         dataKey="date"
+                        angle={dateRange === '90d' ? -90 : -45}
                         tick={{
-                          fontSize: 11,
-                          angle: dateRange === '90d' ? -90 : -45,
-                          textAnchor: 'end'
+                          fontSize: 11,                          textAnchor: 'end'
                         }}
                         tickLine={{ stroke: '#e2e8f0' }}
                         interval={getXAxisInterval()}

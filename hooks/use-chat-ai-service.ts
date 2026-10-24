@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { useChatAI } from '@/hooks/use-ai-service'
 import type { AIConfig } from '@/lib/types'
-import type { Message } from '@ai-sdk/react'
+import type { ChatMessage as Message } from '@/lib/chat-stream'
 
 export interface UseChatAIServiceOptions {
   aiConfig: AIConfig
@@ -22,7 +22,7 @@ export interface UseChatAIServiceResult {
   handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void
   isLoading: boolean
   error: Error | null
-  setMessages: (messages: Message[]) => void
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>
   isPrivateMode: boolean
   isConfigValid: boolean
   configError?: string

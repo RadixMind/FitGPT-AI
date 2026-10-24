@@ -13,11 +13,12 @@ function getNextResetTime(): string {
 export interface ApiAuthResult {
   success: boolean
   session?: any
-  usageManager?: UsageManager
+  usageManager?: UsageManager | null
   error?: {
     message: string
     code: string
     status: number
+    details?: Record<string, unknown>
   }
 }
 

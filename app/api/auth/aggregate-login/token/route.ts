@@ -17,9 +17,7 @@ export async function POST(request: NextRequest) {
       code = body.code
     }
 
-    console.log('Token endpoint called with code:', code)
-
-    if (!code) {
+    if (typeof code !== 'string' || !code || code.length > 2048) {
       return NextResponse.json(
         { error: 'Missing authorization code' },
         { status: 400 }
@@ -30,18 +28,13 @@ export async function POST(request: NextRequest) {
     const userData = getTempUserData(code)
 
     if (!userData) {
-      console.error('No user data found for code:', code)
       return NextResponse.json(
         { error: 'Invalid or expired authorization code' },
         { status: 400 }
       )
     }
 
-    console.log('User data retrieved for token endpoint:', {
-      social_uid: userData.social_uid,
-      nickname: userData.nickname,
-      type: userData.type
-    })
+    deleteTempUserData(code)
 
     // 返回符合 OAuth 2.0 标准的 token 响应
     const tokenResponse = {
@@ -63,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     console.log('Returning token response')
 
-    return NextResponse.json(tokenResponse)
+    return NextResponse.json(tokenResponse, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('Token endpoint error:', error)
     return NextResponse.json(

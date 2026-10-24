@@ -5,7 +5,7 @@ import { InputValidator } from '@/lib/input-validator'
 import { logSecurityEvent } from '@/lib/security-monitor'
 
 export async function POST(req: NextRequest) {
-  const ip = req.ip || req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+  const ip = (req as NextRequest & { ip?: string }).ip || req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
   const userAgent = req.headers.get('user-agent') || 'unknown';
 
   try {

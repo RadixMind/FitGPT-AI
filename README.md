@@ -48,6 +48,8 @@ FitGPT 使用了现代化的技术栈来构建高效、可扩展的应用：
 
 ## 部署指南
 
+运行环境：Node.js 22.23.4+（22.x）或 24.22.1+（24.x），pnpm 10.26.0。Docker 使用 Node.js 22.23.4。
+
 ### 1\. 环境配置
 
 在部署之前，您需要准备好环境变量。首先，复制环境文件模板：
@@ -85,8 +87,16 @@ DATABASE_URL=your_database_connection_string (单独使用PostgreSQL的情况下
 # API 密钥
 DEFAULT_OPENAI_BASE_URL=https://api.openai.com
 DEFAULT_OPENAI_API_KEY=sk-xx
-KEY_ENCRYPTION_SECRE=xx
+KEY_ENCRYPTION_SECRET=请设置至少32字节的随机秘密
 ```
+
+安全配置说明：
+
+- `KEY_ENCRYPTION_SECRET` 和 `NEXTAUTH_SECRET` 至少使用 32 字节的随机秘密。共享密钥采用 AES-GCM 加密；旧 CryptoJS 密文仍可读取。轮换加密秘密时，可通过 `KEY_ENCRYPTION_PREVIOUS_SECRETS` 提供 JSON 字符串数组（最多 3 个旧秘密），完成旧数据迁移后撤销旧秘密。
+- 定时刷新模型需要配置至少 32 字节的 `CRON_SECRET`，调用时携带 `Authorization: Bearer <CRON_SECRET>`。手动全局刷新要求管理员权限。
+- 模型地址默认要求 HTTPS，并拒绝内网、保留地址和重定向。自建内网模型需在服务端配置 `AI_ALLOWED_HOSTS`，值为逗号分隔的确切主机名或 IP，不含协议、端口或通配符。
+- PostgreSQL 生产连接验证 TLS 证书；使用私有 CA 时设置 `DATABASE_SSL_CA`。生产环境关闭 `/api/debug/*`。
+
 
 ### 2\. 使用 Docker Compose 部署 (推荐)
 

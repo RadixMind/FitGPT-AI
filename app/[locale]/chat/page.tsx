@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useState, useRef, useEffect, useCallback } from "react"
-import { useChat } from "@ai-sdk/react"
+import { useChat } from "@/hooks/use-chat"
+import { consumeChatStream } from "@/lib/chat-stream"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -18,7 +19,7 @@ import { EnhancedMessageRenderer } from "@/components/enhanced-message-renderer"
 import type { AIConfig, AIMemoryUpdateRequest } from "@/lib/types"
 import { format } from "date-fns"
 import { Trash2, User, Stethoscope, Dumbbell, Flame, Brain, Clock, Menu, X, ChevronDown, ImageIcon, Upload, RotateCcw, Copy, Download } from "lucide-react"
-import type { Message } from "@ai-sdk/react"
+import type { ChatMessage as Message } from "@/lib/chat-stream"
 import { useTranslation } from "@/hooks/use-i18n"
 import styles from "./chat.module.css"
 import { compressImage } from "@/lib/image-utils"
@@ -1370,46 +1371,10 @@ export default function ChatPage() {
       setMessages([...newMessages, newAssistantMessage])
 
       // 处理流式响应
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder('utf-8')
-
-      if (reader) {
-        try {
-          let buffer = ''
-
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
-
-            for (const line of lines) {
-              if (line.startsWith('0:"')) {
-                try {
-                  const content = line.slice(3, -1)
-                  const decodedContent = content.replace(/\\"/g, '"').replace(/\\n/g, '\n')
-
-                  // 直接更新，不使用防抖
-                  setMessages(currentMessages => {
-                    const updatedMessages = [...currentMessages]
-                    const lastMessage = updatedMessages[updatedMessages.length - 1]
-                    if (lastMessage && lastMessage.role === 'assistant') {
-                      lastMessage.content += decodedContent
-                    }
-                    return updatedMessages
-                  })
-                } catch (e) {
-                  console.error('Error parsing stream chunk:', e)
-                }
-              }
-            }
-          }
-        } finally {
-          reader.releaseLock()
-        }
-      }
+      await consumeChatStream(response, chunk => {
+        setMessages(current => current.map((message, index) => index === current.length - 1 && message.role === 'assistant'
+          ? { ...message, content: message.content + chunk } : message))
+      })
 
     } catch (error) {
       console.error('Error retrying message:', error)
@@ -1754,47 +1719,10 @@ export default function ChatPage() {
 
       setMessages([...newMessages, assistantMessage])
 
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder('utf-8')
-
-      if (reader) {
-        try {
-          let buffer = ''
-
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
-
-            for (const line of lines) {
-              if (line.startsWith('0:"')) {
-                // 解析AI SDK格式的文本块: 0:"content"
-                try {
-                  const content = line.slice(3, -1) // 移除 0:" 和末尾的 "
-                  const decodedContent = content.replace(/\\"/g, '"').replace(/\\n/g, '\n')
-
-                  // 直接更新，不使用防抖
-                  setMessages(currentMessages => {
-                    const updatedMessages = [...currentMessages]
-                    const lastMessage = updatedMessages[updatedMessages.length - 1]
-                    if (lastMessage && lastMessage.role === 'assistant') {
-                      lastMessage.content += decodedContent
-                    }
-                    return updatedMessages
-                  })
-                } catch (e) {
-                  console.error('Error parsing stream chunk:', e)
-                }
-              }
-            }
-          }
-        } finally {
-          reader.releaseLock()
-        }
-      }
+      await consumeChatStream(response, chunk => {
+        setMessages(current => current.map((message, index) => index === current.length - 1 && message.role === 'assistant'
+          ? { ...message, content: message.content + chunk } : message))
+      })
 
     } catch (error) {
       console.error('Error submitting with images:', error)

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 
 interface LocaleLayoutProps {
   children: React.ReactNode;
-  params: Promise<{ locale: Locale }>;
+  params: Promise<{ locale: string }>;
 }
 
 export default async function LocaleLayout({
@@ -27,7 +27,7 @@ export default async function LocaleLayout({
   const { locale } = await params;
 
   // 验证语言是否支持
-  if (!locales.includes(locale)) {
+  if (!locales.includes(locale as Locale)) {
     notFound();
   }
 
@@ -45,7 +45,7 @@ export default async function LocaleLayout({
       initialSession={session}
     >
       <div className="min-h-screen bg-background">
-        <MainNav locale={locale} />
+        <MainNav locale={locale as Locale} />
         <main>{children}</main>
       </div>
       <Toaster />

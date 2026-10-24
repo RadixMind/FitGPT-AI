@@ -17,7 +17,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
     <div className={cn("prose prose-sm max-w-none dark:prose-invert break-words overflow-wrap-anywhere word-break-break-all hyphens-auto w-full overflow-hidden", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[[rehypeKatex, { trust: false, maxExpand: 1000, maxSize: 20 }]]}
         components={{
           // 自定义组件样式
           h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0 break-words word-break-break-all">{children}</h1>,
@@ -42,8 +42,8 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
           blockquote: ({ children }) => (
             <blockquote className="border-l-4 border-muted-foreground pl-4 italic my-2">{children}</blockquote>
           ),
-          code: ({ inline, children }) =>
-            inline ? (
+          code: ({ className, children }) =>
+            !className && !String(children).endsWith('\n') ? (
               <code className="bg-muted px-1 py-0.5 rounded text-sm font-mono break-words word-break-break-all">{children}</code>
             ) : (
               <div className="bg-muted p-3 rounded-md overflow-x-auto my-2 max-w-full w-full">

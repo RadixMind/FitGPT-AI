@@ -184,7 +184,7 @@ export function TrustLevelBadge({
     return (
       <Icon
         className={`${iconSize[size]} ${info.color}`}
-        title={info.label}
+        aria-label={info.label}
       />
     )
   }

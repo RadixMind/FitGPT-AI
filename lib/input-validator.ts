@@ -7,6 +7,9 @@ export interface ValidationRule {
   required?: boolean;
   minLength?: number;
   maxLength?: number;
+  min?: number;
+  max?: number;
+  allowedValues?: readonly unknown[];
   pattern?: RegExp;
   type?: 'string' | 'number' | 'email' | 'url' | 'array' | 'object';
   customValidator?: (value: any) => boolean | string;
@@ -19,6 +22,11 @@ export interface ValidationResult {
 }
 
 export class InputValidator {
+  validate(data: Record<string, any>, rules: ValidationRules): ValidationResult {
+    return InputValidator.validateObject(data, rules)
+  }
+
+  sanitizeInput(value: string): string { return InputValidator.sanitizeString(value) }
   /**
    * 验证单个字段
    */
@@ -92,6 +100,11 @@ export class InputValidator {
         errors.push(`${fieldName} must be no more than ${rules.maxLength} characters/items long`);
       }
     }
+
+    if (rules.type === 'number' && !Number.isFinite(sanitizedValue)) errors.push(`${fieldName} must be a finite number`)
+    if (rules.min !== undefined && sanitizedValue < rules.min) errors.push(`${fieldName} is below minimum`)
+    if (rules.max !== undefined && sanitizedValue > rules.max) errors.push(`${fieldName} exceeds maximum`)
+    if (rules.allowedValues && !rules.allowedValues.includes(sanitizedValue)) errors.push(`${fieldName} is not an allowed value`)
 
     // 正则表达式检查
     if (rules.pattern && typeof value === 'string') {
@@ -259,6 +272,7 @@ export class InputValidator {
 /**
  * 常用验证规则预设
  */
+export type ValidationRules = Record<string, ValidationRule>
 export const ValidationRules = {
   // 用户名
   username: {

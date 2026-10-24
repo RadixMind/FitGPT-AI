@@ -20,7 +20,7 @@ async function checkAdminPermission(userId: string): Promise<boolean> {
 // GET /api/admin/user-bans/[userId] - 获取特定用户的封禁信息
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
     const session = await auth();
@@ -43,7 +43,7 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { userId } = params;
+    const { userId } = await params;
 
     // 获取用户封禁状态
     const isBanned = await userBanManager.isUserBanned(userId);
@@ -80,7 +80,7 @@ export async function GET(
 // PUT /api/admin/user-bans/[userId] - 封禁用户
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
     const session = await auth();
@@ -103,7 +103,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { userId } = params;
+    const { userId } = await params;
     const body = await request.json();
 
     // 验证输入
@@ -172,7 +172,7 @@ export async function PUT(
 // DELETE /api/admin/user-bans/[userId] - 解封用户
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
     const session = await auth();
@@ -195,7 +195,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { userId } = params;
+    const { userId } = await params;
     const { searchParams } = new URL(request.url);
     const reason = searchParams.get('reason') || 'Manual unban by admin';
 

@@ -1,9 +1,6 @@
 import { supabaseAdmin } from './supabase'
 import { OpenAICompatibleClient } from './openai-client'
-import * as CryptoJS from 'crypto-js'
-
-// 加密密钥（实际使用时应该从环境变量获取）
-const ENCRYPTION_KEY = process.env.KEY_ENCRYPTION_SECRET || 'your-secret-key'
+import { encryptApiKey, decryptApiKey } from './api-key-crypto'
 
 export interface SharedKeyConfig {
   id?: string
@@ -39,12 +36,12 @@ export class KeyManager {
 
   // 加密API Key
   private encryptApiKey(apiKey: string): string {
-    return CryptoJS.AES.encrypt(apiKey, ENCRYPTION_KEY).toString()
+    return encryptApiKey(apiKey)
   }
 
   // 解密API Key
   private decryptApiKey(encryptedKey: string): string {
-      return CryptoJS.AES.decrypt(encryptedKey, ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8)
+      return decryptApiKey(encryptedKey)
   }
 
   // 公共解密方法（用于定时任务等外部调用）
@@ -55,23 +52,20 @@ export class KeyManager {
   // 添加共享Key
   async checkDuplicateKey(userId: string, baseUrl: string, apiKey: string): Promise<{ exists: boolean; keyId?: string }> {
     try {
-      // 加密API Key用于比较
-      const encryptedKey = this.encryptApiKey(apiKey)
-
       const { data, error } = await this.supabase
         .from('shared_keys')
-        .select('id')
+        .select('id, api_key_encrypted')
         .eq('user_id', userId)
         .eq('base_url', baseUrl)
-        .eq('api_key_encrypted', encryptedKey)
-        .limit(1)
+        .limit(100)
 
       if (error) {
         console.error('Error checking duplicate key:', error)
         return { exists: false }
       }
 
-      return { exists: data.length > 0, keyId: data[0]?.id }
+      const duplicate = data?.find(row => this.decryptApiKey(row.api_key_encrypted) === apiKey)
+      return { exists: !!duplicate, keyId: duplicate?.id }
     } catch (error) {
       console.error('Exception in checkDuplicateKey:', error)
       return { exists: false }
@@ -234,8 +228,10 @@ export class KeyManager {
 
       return {
         key: {
-          ...selectedKey,
-          apiKey: this.decryptApiKey(selectedKey.api_key_encrypted)
+          id: selectedKey.id, userId: selectedKey.user_id, name: selectedKey.name, baseUrl: selectedKey.base_url,
+          apiKey: this.decryptApiKey(selectedKey.api_key_encrypted), availableModels: selectedKey.available_models || [],
+          dailyLimit: selectedKey.daily_limit, isActive: selectedKey.is_active, usageCountToday: selectedKey.usage_count_today || 0,
+          totalUsageCount: selectedKey.total_usage_count || 0, description: selectedKey.description, tags: selectedKey.tags || []
         }
       };
     }

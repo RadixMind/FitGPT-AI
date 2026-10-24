@@ -41,7 +41,7 @@ requiredEnvVars.forEach(varName => {
       : value.length > 50 
         ? `${value.substring(0, 50)}...`
         : value;
-    console.log(`✅ ${varName}: ${displayValue}`);
+    console.log(`✅ ${varName}: 已设置`);
   }
 });
 
@@ -57,7 +57,7 @@ optionalEnvVars.forEach(varName => {
       : value.length > 50 
         ? `${value.substring(0, 50)}...`
         : value;
-    console.log(`✅ ${varName}: ${displayValue}`);
+    console.log(`✅ ${varName}: 已设置`);
   }
 });
 

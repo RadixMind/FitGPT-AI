@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
     // 获取处理后的客户端IP
     const clientIP = getClientIP(request);
     
-    // 获取原始的 req.ip
-    const rawIP = request.ip;
+    // 获取原始的 (req as NextRequest & { ip?: string }).ip
+    const rawIP = (request as NextRequest & { ip?: string }).ip;
 
     // 分析IP信息
     const ipInfo = {

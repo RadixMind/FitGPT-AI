@@ -6,7 +6,7 @@ import { UserManager } from '@/lib/user-manager'
 // 删除共享Key
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth()
@@ -28,7 +28,7 @@ export async function DELETE(
     }
 
     const keyManager = new KeyManager()
-    const result = await keyManager.deleteSharedKey(params.id, session.user.id)
+    const result = await keyManager.deleteSharedKey((await params).id, session.user.id)
 
     if (!result.success) {
       return NextResponse.json(
@@ -50,7 +50,7 @@ export async function DELETE(
 // 更新共享Key
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth()
@@ -73,7 +73,7 @@ export async function PATCH(
 
     const body = await request.json()
     const keyManager = new KeyManager()
-    const result = await keyManager.updateSharedKey(params.id, session.user.id, body)
+    const result = await keyManager.updateSharedKey((await params).id, session.user.id, body)
 
     if (!result.success) {
       return NextResponse.json(

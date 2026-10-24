@@ -1,5 +1,6 @@
 // 聚合登录 Provider 适配器
 // 支持 QQ、微信、微信公众号、支付宝四种登录方式
+import { fetchWithLimits, readLimitedJSON } from './bounded-io'
 
 export type AggregateLoginType = 'qq' | 'wx' | 'wxmp' | 'alipay'
 
@@ -52,13 +53,13 @@ class AggregateLoginProvider {
       code
     })
 
-    const response = await fetch(`${AGGREGATE_LOGIN_API_BASE}?${params.toString()}`)
+    const response = await fetchWithLimits(`${AGGREGATE_LOGIN_API_BASE}?${params.toString()}`, {}, { timeoutMs: 15_000, maxBytes: 64 * 1024 })
 
     if (!response.ok) {
       throw new Error(`Failed to fetch user info: ${response.status}`)
     }
 
-    const data = await response.json()
+    const data = await readLimitedJSON(response, 64 * 1024)
 
     // 聚合登录API返回格式：{code: 0, msg: "succ", data: {...}}
     if (data.code !== 0) {
@@ -229,6 +230,6 @@ export async function handleAggregateLoginCallback(request: Request) {
     return Response.redirect(callbackUrl)
   } catch (error) {
     console.error('Aggregate login callback error:', error)
-    return Response.redirect(`/zh/signin?error=${encodeURIComponent(error.message)}`)
+    return Response.redirect(`/zh/signin?error=${encodeURIComponent(error instanceof Error ? error.message : 'Login failed')}`)
   }
 }

@@ -1,10 +1,7 @@
 import { OpenAICompatibleClient } from './openai-client'
 import { KeyManager } from './key-manager'
 import type { SharedKeyConfig } from './key-manager'
-import * as CryptoJS from 'crypto-js'
-
-// 加密密钥（实际使用时应该从环境变量获取）
-const ENCRYPTION_KEY = process.env.KEY_ENCRYPTION_SECRET || 'your-secret-key'
+import { decryptApiKey } from './api-key-crypto'
 
 export interface SharedClientOptions {
   preferredModel?: string
@@ -45,8 +42,7 @@ export class SharedOpenAIClient {
 
   // 手动添加解密方法，因为 KeyManager 的是 private
   decryptApiKey(encryptedKey: string): string {
-    const bytes = CryptoJS.AES.decrypt(encryptedKey, ENCRYPTION_KEY)
-    return bytes.toString(CryptoJS.enc.Utf8)
+    return decryptApiKey(encryptedKey)
   }
 
   // 获取当前使用的Key信息（用于显示感谢信息）

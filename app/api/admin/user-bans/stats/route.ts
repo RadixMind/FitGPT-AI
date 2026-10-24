@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 处理每日统计
-    const dailyBanStats = {};
+    const dailyBanStats: Record<string, number> = {};
     const severityStats = { low: 0, medium: 0, high: 0, critical: 0 };
     const typeStats = { manual: 0, automatic: 0, temporary: 0 };
 
@@ -102,12 +102,12 @@ export async function GET(request: NextRequest) {
 
         // 统计严重程度
         if (ban.severity && severityStats.hasOwnProperty(ban.severity)) {
-          severityStats[ban.severity]++;
+          severityStats[ban.severity as keyof typeof severityStats]++;
         }
 
         // 统计封禁类型
         if (ban.ban_type && typeStats.hasOwnProperty(ban.ban_type)) {
-          typeStats[ban.ban_type]++;
+          typeStats[ban.ban_type as keyof typeof typeStats]++;
         }
       });
     }
@@ -173,7 +173,7 @@ export async function GET(request: NextRequest) {
         .limit(1000);
 
       if (!historyError && allBans) {
-        result.history = allBans;
+        Object.assign(result, { history: allBans });
       }
     }
 

@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
 import { KeyManager } from '@/lib/key-manager';
 import { supabaseAdmin } from '@/lib/supabase';
+import { timingSafeEqual } from 'node:crypto';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || secret.length < 32) return NextResponse.json({ error: 'Cron is not configured' }, { status: 503 });
+  const token = Buffer.from(request.headers.get('authorization') || '');
+  const expected = Buffer.from(`Bearer ${secret}`);
+  if (token.length !== expected.length || !timingSafeEqual(token, expected)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const keyManager = new KeyManager();
 
   try {
@@ -10,7 +16,7 @@ export async function GET() {
     const MAX_KEYS_PER_BATCH = 10;
     const { data: activeKeys, error: fetchError } = await supabaseAdmin
       .from('shared_keys')
-      .select('id, base_url, api_key_encrypted, available_models, updated_at')
+      .select('id, base_url, api_key_encrypted, available_models, updated_at, metadata')
       .eq('is_active', true)
       .order('updated_at', { ascending: true }) // 优先更新最久未更新的
       .limit(MAX_KEYS_PER_BATCH);
@@ -100,7 +106,7 @@ export async function GET() {
     };
 
     if (errors.length > 0) {
-      response.errors = errors;
+      Object.assign(response, { errors });
       return NextResponse.json(response, { status: 207 }); // Multi-Status
     }
 

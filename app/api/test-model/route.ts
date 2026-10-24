@@ -1,6 +1,8 @@
 import { OpenAICompatibleClient } from "@/lib/openai-client"
+import { auth } from '@/lib/auth'
 
 export async function POST(req: Request) {
+  if (!(await auth())?.user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const { modelConfig, modelType } = await req.json()
 

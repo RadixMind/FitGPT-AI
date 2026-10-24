@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchWithLimits, readLimitedText } from '@/lib/bounded-io';
 
 // 配置项 - 通过环境变量设置
 const WX_TOKEN = process.env.WX_TOKEN || '';  // 微信开发者平台配置的TOKEN
@@ -88,7 +89,7 @@ async function forwardToSenyu(rawXml: string, searchParams: URLSearchParams): Pr
   
   // 转发所有微信推送的GET参数
   searchParams.forEach((value, key) => {
-    forwardUrl.searchParams.set(key, value);
+    if (key !== 'app') forwardUrl.searchParams.set(key, value);
   });
 
   // 构建POST表单数据
@@ -96,21 +97,20 @@ async function forwardToSenyu(rawXml: string, searchParams: URLSearchParams): Pr
   postParams.set('mptoken', WX_TOKEN);
   postParams.set('xml', rawXml);
 
-  console.log('[WX Message] Forwarding to:', forwardUrl.toString());
+  console.log('[WX Message] Forwarding to configured provider');
   console.log('[WX Message] POST params: mptoken=***, xml length:', rawXml.length);
 
-  const response = await fetch(forwardUrl.toString(), {
+  const response = await fetchWithLimits(forwardUrl.toString(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'User-Agent': 'Mozilla/5.0',
     },
     body: postParams.toString(),
-  });
+  }, { timeoutMs: 15_000, maxBytes: 64 * 1024 });
 
-  const result = await response.text();
+  const result = await readLimitedText(response, 64 * 1024);
   console.log('[WX Message] Forward response status:', response.status);
-  console.log('[WX Message] Forward response body:', result.substring(0, 500));
 
   return result;
 }

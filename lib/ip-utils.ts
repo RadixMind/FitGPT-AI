@@ -38,9 +38,9 @@ export function getClientIP(req: NextRequest): string {
     }
   }
 
-  // 如果没有从头部获取到，尝试使用 req.ip
-  if (clientIP === 'unknown' && req.ip) {
-    clientIP = req.ip;
+  // 如果没有从头部获取到，尝试使用 (req as NextRequest & { ip?: string }).ip
+  if (clientIP === 'unknown' && (req as NextRequest & { ip?: string }).ip) {
+    clientIP = (req as NextRequest & { ip?: string }).ip || 'unknown';
   }
 
   // 处理本地开发环境的特殊情况

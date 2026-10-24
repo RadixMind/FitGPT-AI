@@ -3,7 +3,8 @@
 # =================================================================
 # 阶段 1: 依赖安装
 # =================================================================
-FROM node:20-alpine AS deps
+# Node 22.23.4 alpine 镜像，包含 Node.js 运行环境
+FROM node:22.23.4-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -20,7 +21,7 @@ RUN pnpm install --frozen-lockfile
 # =================================================================
 # 阶段 2: 构建应用
 # =================================================================
-FROM node:20-alpine AS builder
+FROM node:22.23.4-alpine AS builder
 WORKDIR /app
 
 # 与依赖安装阶段使用相同的 pnpm 版本
@@ -45,7 +46,7 @@ RUN pnpm run build
 # =================================================================
 # 阶段 3: 运行时镜像 (runner)
 # =================================================================
-FROM node:20-alpine AS runner
+FROM node:22.23.4-alpine AS runner
 WORKDIR /app
 
 # 创建非root用户，增强安全性

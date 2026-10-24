@@ -2,7 +2,8 @@ import NextAuth from "next-auth"
 import type { NextAuthConfig, User, Account, Profile } from "next-auth"
 import type { JWT } from "next-auth/jwt"
 import Credentials from "next-auth/providers/credentials"
-import { createClient } from "@supabase/supabase-js"
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
+import { verifyLoginProof } from './login-proof'
 
 // 检查是否在构建时
 function isBuildTime(): boolean {
@@ -10,7 +11,7 @@ function isBuildTime(): boolean {
 }
 
 // 延迟初始化 Supabase Admin 客户端
-let _supabaseAdmin: ReturnType<typeof createClient> | null = null
+let _supabaseAdmin: SupabaseClient | null = null
 
 function getSupabaseAdmin() {
   if (!_supabaseAdmin) {
@@ -38,7 +39,7 @@ function getSupabaseAdmin() {
 }
 
 // 使用 Proxy 实现延迟访问
-const supabaseAdmin = new Proxy({} as ReturnType<typeof createClient>, {
+const supabaseAdmin = new Proxy({} as SupabaseClient, {
   get(target, prop) {
     const admin = getSupabaseAdmin()
     return admin[prop as keyof typeof admin]
@@ -51,21 +52,25 @@ const CredentialsProvider = Credentials({
   name: "Credentials",
   credentials: {
     userId: { label: "User ID", type: "text" },
-    providerUserId: { label: "Provider User ID", type: "text" }
+    providerUserId: { label: "Provider User ID", type: "text" },
+    loginProof: { label: "Server login proof", type: "text" }
   },
   async authorize(credentials) {
     if (!credentials?.userId || !credentials?.providerUserId) {
       return null
     }
+    if (typeof credentials.userId !== 'string' || typeof credentials.providerUserId !== 'string' ||
+        !await verifyLoginProof(credentials.loginProof, credentials.userId, credentials.providerUserId)) return null
 
     // 使用 Admin 客户端从数据库获取用户信息,绕过 RLS 限制
     const { data: userData, error } = await supabaseAdmin
       .from('users')
       .select('*')
       .eq('id', credentials.userId as string)
+      .eq('provider_user_id', credentials.providerUserId)
       .single()
 
-    if (error || !userData) {
+    if (error || !userData || userData.is_active === false) {
       console.error('Failed to get user data:', error)
       return null
     }

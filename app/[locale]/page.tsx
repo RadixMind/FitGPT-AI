@@ -1615,7 +1615,7 @@ export default function Dashboard({ params }: { params: Promise<{ locale: string
                       mode="single"
                       selected={selectedDate}
                       onSelect={(date) => date && setSelectedDate(date)}
-                      initialFocus
+                      autoFocus
                       locale={currentLocale}
                       hasRecord={hasRecord}
                     />

@@ -139,8 +139,8 @@ async function getSecurityStats(days: number = 7) {
         details: event.details || {},
         createdAt: event.created_at,
         user: event.users ? {
-          username: event.users.username,
-          trustLevel: event.users.trust_level
+          username: (Array.isArray(event.users) ? event.users[0] : event.users)?.username,
+          trustLevel: (Array.isArray(event.users) ? event.users[0] : event.users)?.trust_level
         } : null
       })),
       dailyTrends: dailyViolations,

@@ -1,8 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 // 缓存客户端实例
-let _supabase: any = null
-let _supabaseAdmin: any = null
+let _supabase: SupabaseClient | null = null
+let _supabaseAdmin: SupabaseClient | null = null
 
 // 检查是否在构建时
 function isBuildTime(): boolean {
@@ -47,8 +47,8 @@ function getSupabaseConfig() {
   if (process.env.NODE_ENV !== 'production' || process.env.VERCEL_ENV === 'preview') {
     console.log('Supabase Environment Check:', {
       url: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'MISSING',
-      anonKey: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'MISSING',
-      serviceKey: supabaseServiceKey ? `${supabaseServiceKey.substring(0, 20)}...` : 'MISSING'
+      anonKeyConfigured: !!supabaseAnonKey,
+      serviceKeyConfigured: !!supabaseServiceKey
     })
   }
 
@@ -87,15 +87,19 @@ export function getSupabaseAdmin() {
 }
 
 // 向后兼容的导出
-export const supabase = new Proxy({}, {
+export const supabase = new Proxy({} as SupabaseClient, {
   get(target, prop) {
-    return getSupabase()[prop]
+    const client = getSupabase()
+    const value = Reflect.get(client, prop, client)
+    return typeof value === 'function' ? value.bind(client) : value
   }
 })
 
-export const supabaseAdmin = new Proxy({}, {
+export const supabaseAdmin = new Proxy({} as SupabaseClient, {
   get(target, prop) {
-    return getSupabaseAdmin()[prop]
+    const client = getSupabaseAdmin()
+    const value = Reflect.get(client, prop, client)
+    return typeof value === 'function' ? value.bind(client) : value
   }
 })
 

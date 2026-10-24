@@ -128,14 +128,14 @@ export function UsageLeaderboard() {
 
     switch (trustLevel) {
       case 1:
-        return <Shield className="h-3 w-3 text-blue-500" title="信任用户" />
+        return <Shield className="h-3 w-3 text-blue-500" aria-label="信任用户" />
       case 2:
-        return <Star className="h-3 w-3 text-purple-500" title="高级用户" />
+        return <Star className="h-3 w-3 text-purple-500" aria-label="高级用户" />
       case 3:
       case 4:
-        return <Crown className="h-3 w-3 text-yellow-500" title="VIP用户" />
+        return <Crown className="h-3 w-3 text-yellow-500" aria-label="VIP用户" />
       default:
-        return <Shield className="h-3 w-3 text-gray-500" title={`信任等级 ${trustLevel}`} />
+        return <Shield className="h-3 w-3 text-gray-500" aria-label={`信任等级 ${trustLevel}`} />
     }
   }
 

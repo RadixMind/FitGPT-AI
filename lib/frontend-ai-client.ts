@@ -1,3 +1,5 @@
+import { fetchWithLimits, IO_LIMITS, readLimitedJSON } from './bounded-io'
+
 // 超时配置常量
 const TIMEOUT_CONFIG = {
   CONNECTION_TEST: 15000,    // 连接测试：15秒
@@ -95,7 +97,7 @@ export class FrontendAIClient {
       max_tokens,
     })
 
-    const result = await response.json()
+    const result = await readLimitedJSON(response)
     return {
       text: result.choices[0]?.message?.content || "",
     }
@@ -166,9 +168,7 @@ export class FrontendAIClient {
         timeout = TIMEOUT_CONFIG.IMAGE_PROCESSING
       }
 
-      const timeoutId = setTimeout(() => controller.abort(), timeout)
-
-      const response = await fetch(url, {
+      const response = await fetchWithLimits(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -176,13 +176,11 @@ export class FrontendAIClient {
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
-      })
-
-      clearTimeout(timeoutId)
+      }, { timeoutMs: timeout, maxBytes: params.stream ? IO_LIMITS.streamBytes : IO_LIMITS.jsonBytes })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`API请求失败: ${response.status} ${response.statusText} - ${errorText}`)
+        await response.body?.cancel()
+        throw new Error(`API请求失败: ${response.status} ${response.statusText}`)
       }
 
       return response
@@ -207,26 +205,23 @@ export class FrontendAIClient {
       const url = `${this.config.baseUrl}/v1/models`
 
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_CONFIG.CONNECTION_TEST)
-
-      const response = await fetch(url, {
+      const response = await fetchWithLimits(url, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${this.config.apiKey}`,
         },
         signal: controller.signal,
-      })
-
-      clearTimeout(timeoutId)
+      }, { timeoutMs: TIMEOUT_CONFIG.CONNECTION_TEST })
 
       if (!response.ok) {
-        const errorText = await response.text()
+        await response.body?.cancel()
         return {
           success: false,
-          error: `连接测试失败: ${response.status} ${response.statusText} - ${errorText}`
+          error: `连接测试失败: ${response.status} ${response.statusText}`
         }
       }
 
+      await response.body?.cancel()
       return { success: true }
     } catch (error) {
       if (error instanceof Error) {

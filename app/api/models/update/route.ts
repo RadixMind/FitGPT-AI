@@ -1,18 +1,22 @@
 import { NextResponse } from 'next/server';
 import { KeyManager } from '@/lib/key-manager';
 import { supabaseAdmin } from '@/lib/supabase';
+import { auth } from '@/lib/auth';
 
 // 限制更新频率，避免过于频繁的调用
 const UPDATE_COOLDOWN_MINUTES = 30;
 
 export async function POST() {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if ((session.user.trustLevel ?? 0) < 4) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const keyManager = new KeyManager();
 
   try {
     // 1. 检查是否有需要更新的密钥
     const { data: keysNeedingUpdate, error: fetchError } = await supabaseAdmin
       .from('shared_keys')
-      .select('id, base_url, api_key_encrypted, available_models, updated_at')
+      .select('id, base_url, api_key_encrypted, available_models, updated_at, metadata')
       .eq('is_active', true)
       .or(`metadata->needs_model_update.eq.true,updated_at.lt.${new Date(Date.now() - UPDATE_COOLDOWN_MINUTES * 60 * 1000).toISOString()}`);
 
@@ -102,7 +106,7 @@ export async function POST() {
     };
 
     if (errors.length > 0) {
-      response.errors = errors;
+      Object.assign(response, { errors });
       return NextResponse.json(response, { status: 207 }); // Multi-Status
     }
 

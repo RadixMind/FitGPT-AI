@@ -1,5 +1,6 @@
 // PostgreSQL 数据库提供商实现
 import { Pool, PoolClient } from 'pg'
+import { sqlIdentifier, sqlProjection, pageSize } from '../../sql-identifiers'
 import type { 
   DatabaseClient, 
   ServerDatabaseClient, 
@@ -17,24 +18,24 @@ export class PostgreSQLProvider implements DatabaseClient {
     this.currentUserId = userId
     this.pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true, ...(process.env.DATABASE_SSL_CA ? { ca: process.env.DATABASE_SSL_CA } : {}) } : false,
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000,
     })
   }
 
-  private buildWhereClause(where?: Record<string, any>): { clause: string; values: any[] } {
+  private buildWhereClause(where?: Record<string, any>, startIndex = 1): { clause: string; values: any[] } {
     if (!where || Object.keys(where).length === 0) {
       return { clause: '', values: [] }
     }
 
     const conditions: string[] = []
     const values: any[] = []
-    let paramIndex = 1
+    let paramIndex = startIndex
 
     Object.entries(where).forEach(([key, value]) => {
-      conditions.push(`${key} = $${paramIndex}`)
+      conditions.push(`${sqlIdentifier(key)} IS NOT DISTINCT FROM $${paramIndex}`)
       values.push(value)
       paramIndex++
     })
@@ -49,7 +50,7 @@ export class PostgreSQLProvider implements DatabaseClient {
     if (!orderBy || orderBy.length === 0) return ''
     
     const orders = orderBy.map(({ column, ascending = true }) => 
-      `${column} ${ascending ? 'ASC' : 'DESC'}`
+      `${sqlIdentifier(column)} ${ascending ? 'ASC' : 'DESC'}`
     )
     
     return `ORDER BY ${orders.join(', ')}`
@@ -57,22 +58,24 @@ export class PostgreSQLProvider implements DatabaseClient {
 
   async select<T = any>(table: string, options?: QueryOptions): Promise<QueryResult<T[]>> {
     try {
-      const selectClause = options?.select || '*'
+      const selectClause = sqlProjection(options?.select)
       const { clause: whereClause, values } = this.buildWhereClause(options?.where)
       const orderClause = this.buildOrderClause(options?.orderBy)
       
-      let sql = `SELECT ${selectClause} FROM ${table} ${whereClause} ${orderClause}`
+      let sql = `SELECT ${selectClause} FROM ${sqlIdentifier(table)} ${whereClause} ${orderClause}`
       
       // 添加分页
-      if (options?.limit) {
-        sql += ` LIMIT ${options.limit}`
+      if (options?.limit !== undefined) {
+        values.push(pageSize(options.limit))
+        sql += ` LIMIT $${values.length}`
       }
-      if (options?.offset) {
-        sql += ` OFFSET ${options.offset}`
+      if (options?.offset !== undefined) {
+        values.push(pageSize(options.offset))
+        sql += ` OFFSET $${values.length}`
       }
 
       const result = await this.pool.query(sql, values)
-      return { data: result.rows, error: null, count: result.rowCount || 0 }
+      return { data: result.rows as T[], error: null, count: result.rowCount || 0 }
     } catch (error) {
       return { data: null, error: error as Error }
     }
@@ -96,10 +99,10 @@ export class PostgreSQLProvider implements DatabaseClient {
       const values = Object.values(data)
       const placeholders = values.map((_, index) => `$${index + 1}`)
       
-      let sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`
+      let sql = `INSERT INTO ${sqlIdentifier(table)} (${columns.map(sqlIdentifier).join(', ')}) VALUES (${placeholders.join(', ')})`
       
       if (options?.returning) {
-        sql += ` RETURNING ${options.returning}`
+        sql += ` RETURNING ${sqlProjection(options.returning)}`
       }
 
       const result = await this.pool.query(sql, values)
@@ -113,15 +116,15 @@ export class PostgreSQLProvider implements DatabaseClient {
     try {
       const setColumns = Object.keys(data)
       const setValues = Object.values(data)
-      const setClause = setColumns.map((col, index) => `${col} = $${index + 1}`).join(', ')
+      const setClause = setColumns.map((col, index) => `${sqlIdentifier(col)} = $${index + 1}`).join(', ')
       
-      const { clause: whereClause, values: whereValues } = this.buildWhereClause(options?.where)
+      const { clause: whereClause, values: whereValues } = this.buildWhereClause(options?.where, setValues.length + 1)
       const allValues = [...setValues, ...whereValues]
       
-      let sql = `UPDATE ${table} SET ${setClause} ${whereClause}`
+      let sql = `UPDATE ${sqlIdentifier(table)} SET ${setClause} ${whereClause}`
       
       if (options?.returning) {
-        sql += ` RETURNING ${options.returning}`
+        sql += ` RETURNING ${sqlProjection(options.returning)}`
       }
 
       const result = await this.pool.query(sql, allValues)
@@ -139,13 +142,13 @@ export class PostgreSQLProvider implements DatabaseClient {
       
       const conflictColumn = options?.onConflict || 'id'
       const updateColumns = columns.filter(col => col !== conflictColumn)
-      const updateClause = updateColumns.map(col => `${col} = EXCLUDED.${col}`).join(', ')
+      const updateClause = updateColumns.map(col => `${sqlIdentifier(col)} = EXCLUDED.${sqlIdentifier(col)}`).join(', ')
       
-      let sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) 
-                 ON CONFLICT (${conflictColumn}) DO UPDATE SET ${updateClause}`
+      let sql = `INSERT INTO ${sqlIdentifier(table)} (${columns.map(sqlIdentifier).join(', ')}) VALUES (${placeholders.join(', ')})
+                 ON CONFLICT (${sqlIdentifier(conflictColumn)}) ${updateColumns.length ? `DO UPDATE SET ${updateClause}` : 'DO NOTHING'}`
       
       if (options?.returning) {
-        sql += ` RETURNING ${options.returning}`
+        sql += ` RETURNING ${sqlProjection(options.returning)}`
       }
 
       const result = await this.pool.query(sql, values)
@@ -159,10 +162,10 @@ export class PostgreSQLProvider implements DatabaseClient {
     try {
       const { clause: whereClause, values } = this.buildWhereClause(options?.where)
       
-      let sql = `DELETE FROM ${table} ${whereClause}`
+      let sql = `DELETE FROM ${sqlIdentifier(table)} ${whereClause}`
       
       const result = await this.pool.query(sql, values)
-      return { data: result.rows, error: null }
+      return { data: result.rows as T, error: null }
     } catch (error) {
       return { data: null, error: error as Error }
     }
@@ -173,12 +176,12 @@ export class PostgreSQLProvider implements DatabaseClient {
       const params = options.params || {}
       const paramNames = Object.keys(params)
       const paramValues = Object.values(params)
-      const paramPlaceholders = paramNames.map((name, index) => `${name} => $${index + 1}`)
+      const paramPlaceholders = paramNames.map((name, index) => `${sqlIdentifier(name)} => $${index + 1}`)
       
-      const sql = `SELECT * FROM ${options.functionName}(${paramPlaceholders.join(', ')})`
+      const sql = `SELECT * FROM ${sqlIdentifier(options.functionName)}(${paramPlaceholders.join(', ')})`
       
       const result = await this.pool.query(sql, paramValues)
-      return { data: result.rows, error: null }
+      return { data: result.rows as T, error: null }
     } catch (error) {
       return { data: null, error: error as Error }
     }

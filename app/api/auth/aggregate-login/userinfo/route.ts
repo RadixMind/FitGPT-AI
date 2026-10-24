@@ -9,7 +9,6 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization')
     const accessToken = authHeader?.replace('Bearer ', '')
 
-    console.log('Userinfo endpoint called with token:', accessToken?.substring(0, 50))
 
     if (!accessToken) {
       return NextResponse.json(
@@ -39,28 +38,6 @@ export async function GET(request: NextRequest) {
         location: userData.location,
         mobile: userData.mobile
       })
-    }
-
-    // 如果在临时存储中找不到,尝试解析 access_token
-    // access_token 格式可能是: temp_qq_XXXXX_timestamp
-    if (accessToken.startsWith('temp_')) {
-      const parts = accessToken.split('_')
-      if (parts.length >= 3) {
-        const type = parts[1]
-        const social_uid = parts[2]
-
-        console.log('Parsed access token:', { type, social_uid })
-
-        return NextResponse.json({
-          sub: `${type}_${social_uid}`,
-          name: `${type}_user`,
-          picture: null,
-          email: null,
-          type,
-          social_uid,
-          nickname: `${type}_user`
-        })
-      }
     }
 
     console.error('Unable to retrieve user info for token')

@@ -191,10 +191,10 @@ export async function POST(request: NextRequest) {
             userAgent: request.headers.get('user-agent') || 'unknown',
             eventType: 'invalid_input',
             severity: 'low',
-            description: `Invalid text field in log data: ${error.message}`,
+            description: `Invalid text field in log data: ${(error instanceof Error ? error.message : 'Invalid log data')}`,
             metadata: {
               logIndex: i,
-              error: error.message,
+              error: (error instanceof Error ? error.message : 'Invalid log data'),
               api: 'sync/logs'
             }
           });
@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
             error: 'Invalid text field in log data',
             details: {
               logIndex: i,
-              message: error.message
+              message: (error instanceof Error ? error.message : 'Invalid log data')
             }
           }, { status: 400 });
         }
@@ -245,7 +245,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Sync successful', count: logsToSync.length });
   } catch (error: any) {
     console.error('[API/SYNC/POST] An unexpected error occurred:', error);
-    const errorMessage = error.message || 'An unexpected error occurred.';
+    const errorMessage = (error instanceof Error ? error.message : 'Invalid log data') || 'An unexpected error occurred.';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

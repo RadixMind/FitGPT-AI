@@ -166,7 +166,7 @@ class SupabaseQueryBuilderImpl implements SupabaseQueryBuilder {
   }
 }
 
-class SupabaseCompatClientImpl implements SupabaseCompatClient {
+export class SupabaseCompatClientImpl implements SupabaseCompatClient {
   constructor(private dbClient: DatabaseClient) {}
 
   from(table: string): SupabaseQueryBuilder {

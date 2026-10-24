@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { signIn } from '@/lib/auth'
+import { issueLoginProof } from '@/lib/login-proof'
+import { getAggregateLoginURL } from '@/lib/aggregate-login-url'
+import { fetchWithLimits, readLimitedJSON } from '@/lib/bounded-io'
 
 // 聚合登录 API 基础地址
-const AGGREGATE_LOGIN_API_BASE = 'https://u.arsn.cn/connect.php'
 
 // 支持的登录类型
 type AggregateLoginType = 'qq' | 'wx' | 'wxmp' | 'alipay'
@@ -19,6 +21,10 @@ export async function GET(request: NextRequest) {
 
     const type = searchParams.get('type') as AggregateLoginType
     const code = searchParams.get('code')
+    const state = searchParams.get('state')
+    if (!state || state !== request.cookies.get('fitgpt-login-state')?.value) {
+      return NextResponse.json({ error: 'Invalid login state' }, { status: 400 })
+    }
     const error = searchParams.get('error')
 
     if (error) {
@@ -41,7 +47,6 @@ export async function GET(request: NextRequest) {
       throw new Error('Aggregate login not configured')
     }
 
-    console.log('Processing aggregate login callback:', { type, code })
 
     // 调用聚合登录API获取用户信息
     const params = new URLSearchParams({
@@ -52,14 +57,13 @@ export async function GET(request: NextRequest) {
       code
     })
 
-    const apiResponse = await fetch(`${AGGREGATE_LOGIN_API_BASE}?${params.toString()}`)
+    const apiResponse = await fetchWithLimits(`${getAggregateLoginURL()}?${params.toString()}`, {}, { timeoutMs: 15_000, maxBytes: 64 * 1024 })
 
     if (!apiResponse.ok) {
       throw new Error(`Failed to fetch user info: ${apiResponse.status}`)
     }
 
-    const data = await apiResponse.json()
-    console.log('Aggregate login callback response:', JSON.stringify(data, null, 2))
+    const data = await readLimitedJSON(apiResponse, 64 * 1024)
 
     // 检查响应格式
     if (data.code !== 0) {
@@ -169,6 +173,7 @@ export async function GET(request: NextRequest) {
       await signIn('credentials', {
         userId: userId,
         providerUserId: providerUserId,
+        loginProof: await issueLoginProof(userId, providerUserId),
         redirect: false,
       })
 
@@ -182,7 +187,9 @@ export async function GET(request: NextRequest) {
     const redirectUrl = `${process.env.NEXTAUTH_URL}/zh`
     console.log('Login successful, redirecting to:', redirectUrl)
 
-    return NextResponse.redirect(redirectUrl)
+    const response = NextResponse.redirect(redirectUrl)
+    response.cookies.delete('fitgpt-login-state')
+    return response
 
   } catch (error) {
     console.error('Aggregate login callback error:', error)

@@ -8,19 +8,15 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   images: {
     unoptimized: true,
   },
   // 启用standalone输出模式，用于Docker部署
   // 暂时禁用以避免Windows符号链接权限问题
-  output: 'standalone',
+  output: process.platform === 'win32' ? undefined : 'standalone',
 
-  // 优化资源预加载策略，减少未使用警告
-  experimental: {
-    optimizeCss: true,
-  },
 }
 
 export default withNextIntl(nextConfig);

@@ -1,4 +1,7 @@
 import { NextRequest } from 'next/server'
+import { auth } from '@/lib/auth'
+import { fetchModelURL } from '@/lib/model-http'
+import { readLimitedJSON } from '@/lib/bounded-io'
 
 // 超时配置常量
 const TIMEOUT_CONFIG = {
@@ -7,6 +10,7 @@ const TIMEOUT_CONFIG = {
 } as const
 
 export async function POST(req: NextRequest) {
+  if (!(await auth())?.user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const { baseUrl, apiKey, testType = 'basic' } = await req.json()
 
@@ -22,24 +26,18 @@ export async function POST(req: NextRequest) {
 
     // 1. 基础连接测试
     try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_CONFIG.DIAGNOSTIC)
-
       const testUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
       const pingUrl = testUrl.includes('/v1') ? testUrl : `${testUrl}/v1/models`
 
 
 
-      const response = await fetch(pingUrl, {
+      const response = await fetchModelURL(pingUrl, {
         method: 'GET',
         headers: {
           'User-Agent': 'HealthApp-Diagnostic/1.0',
           ...(apiKey && { 'Authorization': `Bearer ${apiKey}` })
         },
-        signal: controller.signal
-      })
-
-      clearTimeout(timeoutId)
+      }, { timeoutMs: TIMEOUT_CONFIG.DIAGNOSTIC })
 
       results.tests.connection = {
         success: true,
@@ -52,7 +50,7 @@ export async function POST(req: NextRequest) {
       // 如果有API Key，尝试解析响应
       if (apiKey && response.ok) {
         try {
-          const data = await response.json()
+          const data = await readLimitedJSON(response)
           results.tests.apiResponse = {
             success: true,
             hasData: !!data,
@@ -67,6 +65,7 @@ export async function POST(req: NextRequest) {
           }
         }
       }
+      void response.body?.cancel().catch(() => {})
 
     } catch (error) {
       results.tests.connection = {

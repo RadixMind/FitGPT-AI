@@ -243,6 +243,9 @@ const intlMiddleware = createMiddleware({
 });
 
 export default async function middleware(req: NextRequest) {
+  if (process.env.NODE_ENV === 'production' && req.nextUrl.pathname.startsWith('/api/debug')) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   const path = req.nextUrl.pathname;
 
   // 🔒 第一层：请求大小检查（防止超大请求攻击）

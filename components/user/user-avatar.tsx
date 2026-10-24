@@ -27,13 +27,13 @@ export function UserAvatar({
     
     switch (trustLevel) {
       case 1:
-        return <Shield className="h-2.5 w-2.5 text-blue-500" title="LV1" />
+        return <Shield className="h-2.5 w-2.5 text-blue-500" aria-label="LV1" />
       case 2:
-        return <Star className="h-2.5 w-2.5 text-purple-500" title="LV2" />
+        return <Star className="h-2.5 w-2.5 text-purple-500" aria-label="LV2" />
       case 3:
-        return <Crown className="h-2.5 w-2.5 text-yellow-500" title="LV3" />
+        return <Crown className="h-2.5 w-2.5 text-yellow-500" aria-label="LV3" />
       case 4:
-        return <Crown className="h-2.5 w-2.5 text-orange-500" title="LV4" />
+        return <Crown className="h-2.5 w-2.5 text-orange-500" aria-label="LV4" />
       default:
         return null
     }

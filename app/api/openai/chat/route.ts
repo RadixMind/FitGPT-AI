@@ -1,4 +1,6 @@
 // 移除不再需要的导入，现在统一使用 SharedOpenAIClient
+import { toChatProtocol } from '@/lib/openai-stream'
+import { validateInputComplexity } from '@/lib/bounded-io'
 import { formatDailyStatusForAI } from "@/lib/utils"
 import { checkApiAuth, rollbackUsageIfNeeded } from '@/lib/api-auth-helper'
 import type { DailyLog, UserProfile, AIConfig } from "@/lib/types"
@@ -19,6 +21,7 @@ export async function POST(req: Request) {
     let aiConfig
     try {
       aiConfig = JSON.parse(aiConfigStr)
+      validateInputComplexity(aiConfig)
     } catch (e) {
       return Response.json({ error: "Invalid AI configuration format" }, { status: 400 })
     }
@@ -535,86 +538,12 @@ export async function POST(req: Request) {
 
     //console.log("Stream created successfully with key:", keyInfo?.id)
 
-    // 转换 SSE 流为 AI SDK 兼容格式
-    const encoder = new TextEncoder()
-    const transformedStream = new ReadableStream({
-      async start(controller) {
-        let isControllerClosed = false
-
-        const closeController = () => {
-          if (!isControllerClosed) {
-            isControllerClosed = true
-            controller.close()
-          }
-        }
-
-        const enqueueData = (data: Uint8Array) => {
-          if (!isControllerClosed) {
-            controller.enqueue(data)
-          }
-        }
-
-        try {
-          const reader = stream.body?.getReader()
-          if (!reader) {
-            throw new Error('No stream reader available')
-          }
-
-          const decoder = new TextDecoder('utf-8')
-          let buffer = ''
-
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6)
-                if (data === '[DONE]') {
-                  // 发送结束标记
-                  const finishChunk = `d:{"finishReason":"stop","usage":{"promptTokens":0,"completionTokens":0}}\n`
-                  enqueueData(encoder.encode(finishChunk))
-                  closeController()
-                  return
-                }
-
-                try {
-                  const parsed = JSON.parse(data)
-                  const content = parsed.choices?.[0]?.delta?.content
-                  if (content) {
-                    // 直接发送文本块，不使用缓冲
-                    const textChunk = `0:"${content.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`
-                    enqueueData(encoder.encode(textChunk))
-                  }
-                } catch (e) {
-                  // 忽略解析错误
-                  console.warn('Failed to parse SSE data:', data)
-                }
-              }
-            }
-          }
-
-          // 如果没有正常结束，发送结束标记
-          const finishChunk = `d:{"finishReason":"stop","usage":{"promptTokens":0,"completionTokens":0}}\n`
-          enqueueData(encoder.encode(finishChunk))
-          closeController()
-        } catch (error) {
-          console.error('Stream transformation error:', error)
-          if (!isControllerClosed) {
-            controller.error(error)
-          }
-        }
-      }
-    })
+    if (!stream.body) throw new Error('Empty model stream')
+    const transformedStream = toChatProtocol(stream.body)
 
     return new Response(transformedStream, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
       },
     })
   } catch (error) {

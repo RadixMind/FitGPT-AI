@@ -1,3 +1,6 @@
+import { IO_LIMITS, readLimitedJSON } from './bounded-io.ts'
+import { fetchModelURL } from './model-http.ts'
+
 // 检测是否在 Vercel 环境中运行
 const isVercelEnvironment = process.env.VERCEL === '1' || process.env.VERCEL_ENV !== undefined
 
@@ -101,9 +104,7 @@ export class OpenAICompatibleClient {
         timeout = TIMEOUT_CONFIG.SMART_SUGGESTIONS
       }
 
-      const timeoutId = setTimeout(() => controller.abort(), timeout)
-
-      const response = await fetch(url, {
+      const response = await fetchModelURL(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json; charset=utf-8",
@@ -112,17 +113,14 @@ export class OpenAICompatibleClient {
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
-      })
-
-      clearTimeout(timeoutId)
+      }, { timeoutMs: timeout, maxBytes: params.stream ? IO_LIMITS.streamBytes : IO_LIMITS.jsonBytes })
 
       console.log("Response status:", response.status)
       //console.log("Response headers:", Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("API Error Response:", errorText)
-        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`)
+        await response.body?.cancel()
+        throw new Error(`API request failed: ${response.status} ${response.statusText}`)
       }
 
       return response
@@ -182,7 +180,7 @@ export class OpenAICompatibleClient {
       max_tokens: params.max_tokens,
     })
 
-    const result = await response.json()
+    const result = await readLimitedJSON(response)
     //console.log("Generate text result:", {
     //  hasChoices: !!result.choices,
     //  choiceCount: result.choices?.length || 0,
@@ -245,27 +243,22 @@ export class OpenAICompatibleClient {
     try {
       // 创建 AbortController 用于超时控制
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_CONFIG.CONNECTION_TEST)
-
-      const response = await fetch(url, {
+      const response = await fetchModelURL(url, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
         },
         signal: controller.signal,
-      })
-
-      clearTimeout(timeoutId)
+      }, { timeoutMs: TIMEOUT_CONFIG.CONNECTION_TEST })
 
       console.log("List models response status:", response.status)
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("List models error:", errorText)
-        throw new Error(`Failed to fetch models: ${response.status} ${response.statusText} - ${errorText}`)
+        await response.body?.cancel()
+        throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`)
       }
 
-      const result = await response.json()
+      const result = await readLimitedJSON(response)
       console.log("Models fetched:", result.data?.length || 0)
       return result
     } catch (error) {

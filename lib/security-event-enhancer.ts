@@ -15,6 +15,19 @@ export interface SecurityEventUpdate {
 export class SecurityEventEnhancer {
   private static instance: SecurityEventEnhancer;
 
+  private async markEvents(events: Array<{ id: string; metadata: unknown }>, userId: string, reason: string): Promise<void> {
+    for (let index = 0; index < events.length; index += 10) {
+      await Promise.all(events.slice(index, index + 10).map(async event => {
+        const previous = event.metadata && typeof event.metadata === 'object' && !Array.isArray(event.metadata) ? event.metadata : {}
+        const { error } = await supabaseAdmin.from('security_events').update({
+          user_id: userId,
+          metadata: { ...previous, enhanced: true, enhanced_at: new Date().toISOString(), enhancement_reason: reason },
+        }).eq('id', event.id).is('user_id', null)
+        if (error) throw error
+      }))
+    }
+  }
+
   static getInstance(): SecurityEventEnhancer {
     if (!SecurityEventEnhancer.instance) {
       SecurityEventEnhancer.instance = new SecurityEventEnhancer();
@@ -33,34 +46,18 @@ export class SecurityEventEnhancer {
       // 查找最近时间窗口内，相同IP但缺少用户ID的安全事件
       const { data: events, error } = await supabaseAdmin
         .from('security_events')
-        .select('id, created_at, event_type')
+        .select('id, created_at, event_type, metadata')
         .eq('ip_address', ipAddress)
         .is('user_id', null)
         .gte('created_at', windowStart.toISOString())
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false }).limit(500);
 
       if (error || !events || events.length === 0) {
         return 0;
       }
 
       // 更新这些事件，添加用户ID
-      const eventIds = events.map(event => event.id);
-      
-      const { error: updateError } = await supabaseAdmin
-        .from('security_events')
-        .update({ 
-          user_id: userId,
-          metadata: supabaseAdmin.raw(`
-            COALESCE(metadata, '{}'::jsonb) || 
-            '{"enhanced": true, "enhanced_at": "${new Date().toISOString()}", "enhancement_reason": "user_activity_correlation"}'::jsonb
-          `)
-        })
-        .in('id', eventIds);
-
-      if (updateError) {
-        console.error('Error enhancing security events:', updateError);
-        return 0;
-      }
+      await this.markEvents(events, userId, 'user_activity_correlation');
 
       // 记录增强操作
       await this.logEnhancementActivity(userId, ipAddress, events.length, timeWindow);
@@ -159,32 +156,18 @@ export class SecurityEventEnhancer {
       // 查找时间范围内相同IP但缺少用户ID的事件
       const { data: events, error } = await supabaseAdmin
         .from('security_events')
-        .select('id')
+        .select('id, metadata')
         .eq('ip_address', ipAddress)
         .is('user_id', null)
         .gte('created_at', startTime.toISOString())
-        .lte('created_at', endTime.toISOString());
+        .lte('created_at', endTime.toISOString()).limit(500);
 
       if (error || !events || events.length === 0) {
         return 0;
       }
 
       // 更新事件
-      const { error: updateError } = await supabaseAdmin
-        .from('security_events')
-        .update({ 
-          user_id: userId,
-          metadata: supabaseAdmin.raw(`
-            COALESCE(metadata, '{}'::jsonb) || 
-            '{"enhanced": true, "enhanced_at": "${new Date().toISOString()}", "enhancement_reason": "ip_pattern_correlation"}'::jsonb
-          `)
-        })
-        .in('id', events.map(e => e.id));
-
-      if (updateError) {
-        console.error('Error updating events by IP pattern:', updateError);
-        return 0;
-      }
+      await this.markEvents(events, userId, 'ip_pattern_correlation');
 
       return events.length;
     } catch (error) {

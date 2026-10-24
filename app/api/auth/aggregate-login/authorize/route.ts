@@ -1,88 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getAggregateLoginURL } from '@/lib/aggregate-login-url'
+import { fetchWithLimits, readLimitedJSON } from '@/lib/bounded-io'
 
-// 聚合登录 API 基础地址
-const AGGREGATE_LOGIN_API_BASE = 'https://u.arsn.cn/connect.php'
-
-// 支持的登录类型
-type AggregateLoginType = 'qq' | 'wx' | 'wxmp' | 'alipay'
-const VALID_LOGIN_TYPES: AggregateLoginType[] = ['qq', 'wx', 'wxmp', 'alipay']
-
-// 处理聚合登录授权URL获取
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const type = searchParams.get('type') as AggregateLoginType
-
-    if (!type || !VALID_LOGIN_TYPES.includes(type)) {
-      return NextResponse.json(
-        { error: 'Invalid login type' },
-        { status: 400 }
-      )
-    }
-
-    // 获取聚合登录配置
+    const type = request.nextUrl.searchParams.get('type')
+    if (!type || !['qq', 'wx', 'wxmp', 'alipay'].includes(type)) return NextResponse.json({ error: 'Invalid login type' }, { status: 400 })
     const appid = process.env.AGGREGATE_LOGIN_APPID
     const appkey = process.env.AGGREGATE_LOGIN_APPKEY
-    const redirectUri = `${process.env.NEXTAUTH_URL}/api/auth/aggregate-login/callback`
-
-    console.log('Aggregate login config:', { appid, hasAppKey: !!appkey, redirectUri })
-
-    if (!appid || !appkey) {
-      return NextResponse.json(
-        { error: 'Aggregate login not configured' },
-        { status: 500 }
-      )
-    }
-
-    // 构建请求参数
-    const params = new URLSearchParams({
-      act: 'login',
-      appid,
-      appkey,
-      type,
-      redirect_uri: redirectUri
-    })
-
-    const apiUrl = `${AGGREGATE_LOGIN_API_BASE}?${params.toString()}`
-    console.log('Calling aggregate login API:', apiUrl)
-
-    // 调用聚合登录API
-    const response = await fetch(apiUrl)
-
-    console.log('Aggregate login API response status:', response.status)
-    console.log('Aggregate login API response headers:', Object.fromEntries(response.headers.entries()))
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('Failed to fetch auth URL. Response:', errorText)
-      throw new Error(`Failed to fetch auth URL: ${response.status} - ${errorText}`)
-    }
-
-    const data = await response.json()
-    console.log('Aggregate login API response data:', JSON.stringify(data, null, 2))
-
-    // 检查响应格式：聚合登录API返回 {code: 0, msg: "succ", type: "qq", url: "..."}
-    if (data.code !== 0 || !data.url) {
-      console.error('API error - missing success code or URL:', { code: data.code, url: data.url, msg: data.msg })
-      throw new Error(`API error: ${data.msg || 'No URL returned'}`)
-    }
-
-    // 返回授权URL
-    console.log('Successfully got auth URL:', data.url)
-    return NextResponse.json({
-      success: true,
-      url: data.url,
-      type: data.type
-    })
-
-  } catch (error) {
-    console.error('Error getting auth URL:', error)
-    return NextResponse.json(
-      {
-        error: 'Failed to get authorization URL',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    )
+    if (!appid || !appkey || !process.env.NEXTAUTH_URL) return NextResponse.json({ error: 'Aggregate login not configured' }, { status: 503 })
+    const state = crypto.randomUUID()
+    const redirect = new URL('/api/auth/aggregate-login/callback', process.env.NEXTAUTH_URL)
+    redirect.searchParams.set('state', state)
+    const target = new URL(getAggregateLoginURL())
+    target.search = new URLSearchParams({ act: 'login', appid, appkey, type, redirect_uri: redirect.toString() }).toString()
+    const upstream = await fetchWithLimits(target, {}, { timeoutMs: 15_000, maxBytes: 64 * 1024 })
+    if (!upstream.ok) { await upstream.body?.cancel(); throw new Error('Login provider unavailable') }
+    const data = await readLimitedJSON(upstream, 64 * 1024)
+    if (data.code !== 0 || typeof data.url !== 'string') throw new Error('Invalid login provider response')
+    const destination = new URL(data.url)
+    if (!['https:', 'http:'].includes(destination.protocol) || destination.username || destination.password) throw new Error('Invalid login URL')
+    if (destination.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(destination.hostname)) throw new Error('HTTPS login required')
+    const response = NextResponse.json({ success: true, url: destination.toString(), type })
+    response.cookies.set('fitgpt-login-state', state, { httpOnly: true, sameSite: 'lax', secure: new URL(process.env.NEXTAUTH_URL).protocol === 'https:', path: '/api/auth/aggregate-login', maxAge: 300 })
+    return response
+  } catch {
+    return NextResponse.json({ error: 'Failed to get authorization URL' }, { status: 502 })
   }
 }
